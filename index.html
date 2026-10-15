@@ -1341,6 +1341,7 @@ button.ml-tag { font: inherit; font-size: 11px; font-weight: 700; cursor: help; 
            for. Store status is context on top of them, so it sits underneath. -->
       <div id="dynGrid"></div>
       <div id="storePanel"></div>
+      <div id="aiUsagePanel"></div>
       <div id="dynErza"></div>
       <div class="stagebar-wrap">
         <div class="stagebar-title">אפליקציות הנייטיב לפי שלב</div>
@@ -1473,10 +1474,10 @@ button.ml-tag { font: inherit; font-size: 11px; font-weight: 700; cursor: help; 
   <footer>ERZA Orchestrator · ERezult · <span id="footDate"></span> · <a href="https://github.com/Erezults/ERZA_Orchestrator" rel="noopener">registry</a></footer>
 </div>
 
-<script>window.ERZA_UI_VER='ab3af242be9c'</script>
+<script>window.ERZA_UI_VER='63a498bec199'</script>
 <script>window.ERZA_DEPLOY_VER='1.23.1'</script>
 <script>window.ERZA_ICONV='e1286bbf'</script>
-<script src="data.enc.js?v=17927f86"></script>
+<script src="data.enc.js?v=195d0d0a"></script>
 <script>
 /* ---------- constants ---------- */
 const STAGES = {
@@ -2150,8 +2151,63 @@ function storePanelBody() {
   </div></div>`;
 }
 
+// 💸 AI-gateway usage panel (docs/ai-gateway-design.md §6): cost/calls per app, model in use,
+// last probe status, failover events — from registry/ai_usage.json via data.js (ai-usage-report.mjs,
+// hourly). Apps that haven't run the gateway migrations yet show a muted "טרם הוטמע" badge instead
+// of an error — tables-missing is an expected rollout state, not a fault.
+function renderAiUsagePanel() {
+  const el = document.getElementById('aiUsagePanel');
+  if (!el) return;
+  const D = window.ERZA_DATA || {};
+  const au = D.aiUsage;
+  const appsMap = (au && au.apps) || {};
+  const keys = Object.keys(appsMap);
+  if (!keys.length) { el.innerHTML = ''; return; }
+
+  const fmtUsd = n => n == null ? '—' : `$${n.toFixed(n < 10 ? 3 : 2)}`;
+  const ago = iso => {
+    if (!iso) return '—';
+    const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 6e4));
+    return m < 1 ? 'עכשיו' : m < 60 ? `לפני ${m} דק׳` : m < 1440 ? `לפני ${Math.round(m / 60)} שע׳` : `לפני ${Math.round(m / 1440)} ימים`;
+  };
+  const icon = app => `<img class="appicon" src="icons/${esc(app)}.png?v=${ICONV}" onerror="this.hidden=true" alt="">`;
+
+  const totalFailovers = keys.reduce((n, k) => n + ((appsMap[k].failoversLast24h || []).length), 0);
+  const rowHtml = app => {
+    const a = appsMap[app];
+    if (!a.hasGateway) {
+      return `<div class="mr-app" style="padding:8px 10px;border:1px solid var(--grid);border-radius:10px;margin-bottom:6px;opacity:.75">
+        <div style="display:flex;align-items:center;gap:8px">${icon(app)}<b>${esc(displayApp(app))}</b>
+          <span class="cat" style="margin-inline-start:auto">⏳ טרם הוטמע ה-gateway</span></div>
+      </div>`;
+    }
+    const fo = a.failoversLast24h || [];
+    const probe = a.lastProbeOk == null ? '<span class="cat">—</span>'
+      : a.lastProbeOk ? `<span style="color:var(--green)">✅ תקין</span>`
+      : `<span style="color:var(--red)">❌ שגיאה</span>`;
+    return `<div class="mr-app" style="padding:10px;border:1px solid var(--grid);border-radius:10px;margin-bottom:8px${fo.length ? ';border-color:#d98c1f' : ''}">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        ${icon(app)}<b>${esc(displayApp(app))}</b>
+        <span class="cat">💰 ${fmtUsd(a.costThisMonth)} החודש</span>
+        <span class="cat">📞 ${a.callsThisMonth == null ? '—' : a.callsThisMonth} קריאות</span>
+        <span class="cat" dir="ltr">🤖 ${esc(a.currentModel || '—')}</span>
+        <span class="cat" style="margin-inline-start:auto">בדיקה אחרונה: ${probe} · ${esc(ago(a.lastProbeAt))}</span>
+      </div>
+      ${fo.length ? `<div class="cat" style="margin-top:6px;color:#d98c1f;font-weight:700">⚠️ ${fo.length} החלפת מודל אוטומטית ב-24 שעות האחרונות — ראה שורת אישור בלטיפולך</div>` : ''}
+    </div>`;
+  };
+
+  el.innerHTML = `<details class="prio-panel" data-mrk="aiusage" style="--panel-accent:#2a9d8f"${totalFailovers ? ' open' : ''}>
+    <summary>💸 AI${totalFailovers ? ` — <span style="color:#d98c1f;font-weight:700">⚠️ ${totalFailovers} החלפות מודל ב-24 שעות</span>` : ''}</summary>
+    <div style="margin-top:8px">
+      <div class="section-sub" style="margin:0 0 8px">עלות ושימוש ב-AI לכל אפליקציה · ${esc(au.updatedAt ? new Date(au.updatedAt).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '')}</div>
+      ${keys.map(rowHtml).join('')}
+    </div></details>`;
+}
+
   function render() {
     renderStorePanel();
+    renderAiUsagePanel();
     const byRank = (a, b) => ((mrAppRanks[a.dir] ?? 99) - (mrAppRanks[b.dir] ?? 99));
     const vn = natives.filter(match).sort(byRank), vw = webs.filter(match), vr = rest.filter(match);
 
