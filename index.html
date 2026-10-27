@@ -1487,7 +1487,7 @@ button.ml-tag { font: inherit; font-size: 11px; font-weight: 700; cursor: help; 
   <footer>ERZA Orchestrator · ERezult · <span id="footDate"></span> · <a href="https://github.com/Erezults/ERZA_Orchestrator" rel="noopener">registry</a></footer>
 </div>
 
-<script>window.ERZA_UI_VER='8593da1cd3f0'</script>
+<script>window.ERZA_UI_VER='fafbf293392c'</script>
 <script>window.ERZA_DEPLOY_VER='1.23.1'</script>
 <script>window.ERZA_ICONV='a966c7bc'</script>
 <script src="data.enc.js?v=1f321446"></script>
@@ -3069,7 +3069,7 @@ function renderStats() {
     const r = fxRates[cur];
     return r ? amt / r : null;
   };
-  const fmtUsd = (n) => n == null ? '—' : `~$${n.toLocaleString(undefined, {maximumFractionDigits: 2})}`;
+  const fmtUsd = (n) => n == null ? '—' : `≈ ${n.toLocaleString(undefined, {maximumFractionDigits: 2})}`;
   // one-time (non-renewing) IAP vs. auto-renewable — SKU/title pattern tells them apart
   // (Apple's own "iap" units bucket mixes both); titles are captured as records are seen.
   const otTitles = {};
@@ -3212,6 +3212,8 @@ function renderStats() {
   const revCellHtml = (curMap, usdTotal) => {
     const cur = Object.entries(curMap).map(([c, n]) => `${n.toLocaleString()} ${c}`).join('<br>');
     if (!cur) return '—';
+    const keys = Object.keys(curMap);
+    if (keys.length === 1 && keys[0] === 'USD') return cur;  // already in USD — no ≈ twin line
     return `${cur}<div class="stats-usd-sub">${fmtUsd(usdTotal || null)}</div>`;
   };
 
@@ -3319,7 +3321,7 @@ function renderStats() {
           <td>${cycleLabel[rr.cycle]}</td>
           <td>${subsCurFmt(rr.unitPrice, rr.currency)}</td>
           <td>${rr.count}</td>
-          <td class="stats-d-amount"><b>${subsCurFmt(rr.amount, rr.currency)}</b><div class="stats-usd-sub">${fmtUsd(usd(rr.amount, rr.currency))}</div></td>
+          <td class="stats-d-amount"><b>${subsCurFmt(rr.amount, rr.currency)}</b>${rr.currency === 'USD' ? '' : `<div class="stats-usd-sub">${fmtUsd(usd(rr.amount, rr.currency))}</div>`}</td>
           <td class="stats-d-buyer">${takePurchasers(rr)}</td>
         </tr>`).join('');
     const detail = hasSub ? `<tr class="stats-detail"><td colspan="7">
