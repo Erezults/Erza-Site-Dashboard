@@ -1487,7 +1487,7 @@ button.ml-tag { font: inherit; font-size: 11px; font-weight: 700; cursor: help; 
   <footer>ERZA Orchestrator · ERezult · <span id="footDate"></span> · <a href="https://github.com/Erezults/ERZA_Orchestrator" rel="noopener">registry</a></footer>
 </div>
 
-<script>window.ERZA_UI_VER='fafbf293392c'</script>
+<script>window.ERZA_UI_VER='e05d6fdfc2ee'</script>
 <script>window.ERZA_DEPLOY_VER='1.23.1'</script>
 <script>window.ERZA_ICONV='a966c7bc'</script>
 <script src="data.enc.js?v=1f321446"></script>
@@ -3069,7 +3069,7 @@ function renderStats() {
     const r = fxRates[cur];
     return r ? amt / r : null;
   };
-  const fmtUsd = (n) => n == null ? '—' : `≈ ${n.toLocaleString(undefined, {maximumFractionDigits: 2})}`;
+  const fmtUsd = (n) => n == null ? '—' : `≈ $${n.toLocaleString(undefined, {maximumFractionDigits: 2})}`;
   // one-time (non-renewing) IAP vs. auto-renewable — SKU/title pattern tells them apart
   // (Apple's own "iap" units bucket mixes both); titles are captured as records are seen.
   const otTitles = {};
