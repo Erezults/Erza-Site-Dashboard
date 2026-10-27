@@ -1474,9 +1474,9 @@ button.ml-tag { font: inherit; font-size: 11px; font-weight: 700; cursor: help; 
   <footer>ERZA Orchestrator · ERezult · <span id="footDate"></span> · <a href="https://github.com/Erezults/ERZA_Orchestrator" rel="noopener">registry</a></footer>
 </div>
 
-<script>window.ERZA_UI_VER='892e72442e8f'</script>
+<script>window.ERZA_UI_VER='06ece517e972'</script>
 <script>window.ERZA_DEPLOY_VER='1.23.1'</script>
-<script>window.ERZA_ICONV='e1286bbf'</script>
+<script>window.ERZA_ICONV='a966c7bc'</script>
 <script src="data.enc.js?v=3359336c"></script>
 <script>
 /* ---------- constants ---------- */
@@ -2960,7 +2960,7 @@ function displayApp(a, plat) {
   if (plat === 'macos' && ASC_NAME_MAC[stripped]) return ASC_NAME_MAC[stripped];
   return ASC_NAME[stripped] || stripped || s;
 }
-const ICON_ALIAS = { Ownest: 'OwnestNative', Salarix: 'SalarixNative', Fundiva: 'FundivaNative', Groupy: 'GroupyNative_New', Healthy: 'HealtyNative', Healty: 'HealtyNative', HomeAssistant: 'HomeAssistant' };
+const ICON_ALIAS = { SAM: 'SAM-Shulhan-Aruch-Manager', sam: 'SAM-Shulhan-Aruch-Manager', 'sam-shulhan-aruch-manager': 'SAM-Shulhan-Aruch-Manager', Ownest: 'OwnestNative', Salarix: 'SalarixNative', Fundiva: 'FundivaNative', Groupy: 'GroupyNative_New', Healthy: 'HealtyNative', Healty: 'HealtyNative', HomeAssistant: 'HomeAssistant' };
 const mrIcon = app => app === 'ERZA'
   ? `<span class="appicon erza-glyph" role="img" aria-label="ERZA" title="ERZA — תשתית">${ERZA_GLYPH}</span>`
   : `<img class="appicon" src="icons/${esc(ICON_ALIAS[app] || app)}.png?v=${ICONV}" onerror="this.hidden=true" alt="">`;
