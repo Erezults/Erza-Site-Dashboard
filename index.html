@@ -1487,7 +1487,7 @@ button.ml-tag { font: inherit; font-size: 11px; font-weight: 700; cursor: help; 
   <footer>ERZA Orchestrator · ERezult · <span id="footDate"></span> · <a href="https://github.com/Erezults/ERZA_Orchestrator" rel="noopener">registry</a></footer>
 </div>
 
-<script>window.ERZA_UI_VER='219b887455ca'</script>
+<script>window.ERZA_UI_VER='8593da1cd3f0'</script>
 <script>window.ERZA_DEPLOY_VER='1.23.1'</script>
 <script>window.ERZA_ICONV='a966c7bc'</script>
 <script src="data.enc.js?v=1f321446"></script>
@@ -3291,6 +3291,25 @@ function renderStats() {
         <td class="stats-rev-cell">${revCellHtml(byCycle.onetime, usdByCycle.onetime)}</td>
       </tr>`;
     const cycleLabel = {monthly: 'חודשי', yearly: 'שנתי', onetime: 'חד-פעמי'};
+    // רוכש — identities come from the app's OWN database (registry/purchasers.json via
+    // asc-purchasers.mjs), never from Apple. Assignment to a country row: by Apple storefront
+    // when known, else by cycle when the row is the only candidate for that cycle.
+    const purchApp = (((window.ERZA_DATA || {}).purchasers || {}).apps || {})[b.app.dir || b.app.name] || null;
+    const purchPool = purchApp && purchApp.ok ? (purchApp.purchasers || []).slice() : [];
+    const purchLabel = (p) => esc(p.name || (p.email || '').split('@')[0] || '?') + (p.email ? ` <span class="stats-muted">${esc(p.email)}</span>` : '');
+    const takePurchasers = (rr) => {
+      if (!purchApp) return '<span class="stats-muted" title="Apple לא מוסרת זהות רוכשים; לאפליקציה הזו אין נתוני רוכשים מה-DB">לא זמין מ-Apple</span>';
+      if (!purchApp.ok) return `<span class="stats-muted" title="${esc(purchApp.error || '')}">שגיאה בקריאה מה-DB</span>`;
+      const sameCycle = purchPool.filter(p => p.cycle === rr.cycle);
+      let picked = sameCycle.filter(p => p.storefront && rr.country && p.storefront === rr.country);
+      if (!picked.length) {
+        const rowsOfCycle = revenueRows.filter(x => x.cycle === rr.cycle).length;
+        picked = rowsOfCycle === 1 ? sameCycle.filter(p => !p.storefront) : sameCycle.filter(p => !p.storefront).slice(0, rr.count);
+      }
+      picked = picked.slice(0, Math.max(rr.count, 1));
+      for (const p of picked) purchPool.splice(purchPool.indexOf(p), 1);
+      return picked.length ? picked.map(purchLabel).join('<br>') : '<span class="stats-muted">—</span>';
+    };
     const countryName = (cc) => { try { return cc ? (new Intl.DisplayNames(['he'], {type: 'region'}).of(cc) || cc) : 'כל המדינות'; } catch { return cc || 'כל המדינות'; } };
     // sort: biggest revenue (USD) first, then country
     const sorted = revenueRows.slice().sort((x, y) => ((usd(y.amount, y.currency) || 0) - (usd(x.amount, x.currency) || 0)) || String(x.country).localeCompare(String(y.country)));
@@ -3301,12 +3320,12 @@ function renderStats() {
           <td>${subsCurFmt(rr.unitPrice, rr.currency)}</td>
           <td>${rr.count}</td>
           <td class="stats-d-amount"><b>${subsCurFmt(rr.amount, rr.currency)}</b><div class="stats-usd-sub">${fmtUsd(usd(rr.amount, rr.currency))}</div></td>
-          <td class="stats-d-buyer"><span class="stats-muted" title="Apple לא מוסרת זהות רוכשים בדוחות המכירות והמנויים">לא זמין מ-Apple</span></td>
+          <td class="stats-d-buyer">${takePurchasers(rr)}</td>
         </tr>`).join('');
     const detail = hasSub ? `<tr class="stats-detail"><td colspan="7">
         <table class="stats-detail-table">
           <thead><tr><th>מדינה</th><th>מוצר</th><th>מחזור</th><th>מחיר ליחידה</th><th>מנויים / יחידות</th><th>הכנסה</th><th>רוכש</th></tr></thead>
-          <tbody>${detailRows}</tbody>
+          <tbody>${detailRows}${purchPool.length ? `<tr><td colspan="6" class="stats-d-product"><span class="stats-muted">רוכשים פעילים ב-DB ללא שורת מדינה תואמת בדוח Apple</span></td><td class="stats-d-buyer">${purchPool.map(purchLabel).join('<br>')}</td></tr>` : ''}</tbody>
         </table></td></tr>` : '';
     return `<tbody id="stApp${bi}" class="stats-collapsed">${mainRow}${detail}</tbody>`;
   }).join('');
@@ -3316,7 +3335,7 @@ function renderStats() {
     ${bodies}
     <tbody><tr class="stats-total"><td>סה"כ</td><td>${tot.subMonthly.toLocaleString()}</td><td>${tot.subYearly.toLocaleString()}</td><td>${tot.subCode.toLocaleString()}</td><td class="stats-rev-cell">${revCellHtml(tot.rev.monthly, tot.usd.monthly)}</td><td class="stats-rev-cell">${revCellHtml(tot.rev.yearly, tot.usd.yearly)}</td><td class="stats-rev-cell">${revCellHtml(tot.rev.onetime, tot.usd.onetime)}</td></tr></tbody>
     </table></div>
-    <div class="stats-foot">לחיצה על שורת אפליקציה פותחת פירוט לפי מדינה. עמודת "רוכש": Apple לא מוסרת זהות רוכשים — תמולא רק ממקור נתונים של האפליקציה עצמה.</div>
+    <div class="stats-foot">לחיצה על שורת אפליקציה פותחת פירוט לפי מדינה. עמודת "רוכש" מגיעה מבסיס הנתונים של האפליקציה עצמה (Apple לא מוסרת זהות רוכשים); אפליקציה בלי שרת נשארת "לא זמין".</div>
     <div class="stats-modal" id="statsModal" hidden onclick="if(event.target===this)this.hidden=true">
       <div class="stats-modal-card"><button class="stats-modal-x" onclick="document.getElementById('statsModal').hidden=true">✕</button><div id="statsModalBody"></div></div>
     </div>`;
