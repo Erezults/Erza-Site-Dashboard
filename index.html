@@ -1250,7 +1250,7 @@ tr.stats-subrow td { color: var(--ink-2); background: var(--tint); font-size: 11
   <footer>ERZA Orchestrator · ERezult · <span id="footDate"></span> · <a href="https://github.com/Erezults/ERZA_Orchestrator" rel="noopener">registry</a></footer>
 </div>
 
-<script>window.ERZA_UI_VER='80d6f88828d5'</script>
+<script>window.ERZA_UI_VER='acf7a27f6082'</script>
 <script>window.ERZA_DEPLOY_VER='1.23.1'</script>
 <script>window.ERZA_ICONV='a966c7bc'</script>
 <script src="data.enc.js?v=eb169c13"></script>
@@ -1270,6 +1270,10 @@ const STAGES = {
 const CATS = { 'native-app': 'אפליקציה נייטיב', 'web-app': 'ווב', legacy: 'Legacy', tooling: 'כלי עזר', docs: 'תיעוד', config: 'קונפיגורציה', unknown: '—' };
 const MSYM = { implemented: ['✓','m-i','הוטמע'], partial: ['◐','m-p','חלקי'], absent: ['✗','m-a','לא הוטמע'], 'n/a': ['—','m-n','לא רלוונטי'] };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// Only http(s)/mailto may reach an href: a registry URL is data, never trusted markup.
+// (Was mlSafeUrl inside the Mails tab; removing that tab on 2026-11-07 left the portfolio table
+// calling an undefined function, which blanked the whole dashboard.)
+const safeUrl = u => { try { const x = new URL(String(u || '')); return ['https:', 'http:', 'mailto:'].includes(x.protocol) ? x.href : null; } catch { return null; } };
 const CANON_APP = { CoinNative: 'Coin', 'CoinNative-ai': 'Coin', 'CoinNative-native': 'Coin', XpensyNative: 'xpensy', GroupyNative: 'GroupyNative_New', HealthyNative: 'HealtyNative', EmoryxNative: 'Emoryx', HomeNetIPNative: 'HomeNetIP' };
 const canonRows = items => (items || []).map(it => { if (it && CANON_APP[it.app]) it.app = CANON_APP[it.app]; return it; });   // one group per app on the desk (2026-10-27: XpensyNative/xpensy etc. showed twice)
 const arrOf = v => Array.isArray(v) ? v : (v === undefined || v === null || v === '') ? [] : [String(v)];   // registry rows sometimes carry a string where a list is expected (2026-10-27 render crash)
@@ -1463,7 +1467,7 @@ function boot(D, locked) {
     const s = byDir[a.marketingSite] || {};
     const label = (a.marketingSiteUrl || '').replace('https://', '') || a.marketingSite;
     const link = a.marketingSiteUrl
-      ? `<a class="sitelink" href="${esc(mlSafeUrl(a.marketingSiteUrl) || "#")}" target="_blank" rel="noopener">${esc(label)}</a>`
+      ? `<a class="sitelink" href="${esc(safeUrl(a.marketingSiteUrl) || "#")}" target="_blank" rel="noopener">${esc(label)}</a>`
       : `<span class="cat" dir="ltr">${esc(label)}</span>`;
     return `${link}<br>${stageBadge(s, true)}`;
   };
@@ -1494,7 +1498,7 @@ function boot(D, locked) {
         <div class="kv">
           <div><b>שלב:</b> ${esc((STAGES[site.stage] || {}).he || site.stage)} · <b>עודכן:</b> ${fmtDate(site.gitLastCommitDate)}</div>
           ${(site.remaining || []).length ? `<div><b>נותרו באתר:</b> ${site.remaining.length} משימות</div>` : ''}
-          ${a.marketingSiteUrl ? `<div><a class="sitelink" href="${esc(mlSafeUrl(a.marketingSiteUrl) || "#")}" target="_blank" rel="noopener">${esc(a.marketingSiteUrl)}</a></div>` : ''}
+          ${a.marketingSiteUrl ? `<div><a class="sitelink" href="${esc(safeUrl(a.marketingSiteUrl) || "#")}" target="_blank" rel="noopener">${esc(a.marketingSiteUrl)}</a></div>` : ''}
         </div>` : ''}
       </div>
     </div>`;
@@ -2012,7 +2016,7 @@ function renderAiUsagePanel() {
         <td>${stageBadge(a)}</td>
         <td class="num" dir="ltr" style="text-align:right" title="${esc(a.version || '')}">${esc(a.versionShort || '—')}</td>
         <td class="num">${fmtDate(a.gitLastCommitDate)}</td>
-        <td>${a.siteUrl ? `<a class="sitelink" href="${esc(mlSafeUrl(a.siteUrl) || "#")}" target="_blank" rel="noopener">${esc(a.siteUrl.replace('https://', ''))}</a>` : '<span class="cat">—</span>'}</td>
+        <td>${a.siteUrl ? `<a class="sitelink" href="${esc(safeUrl(a.siteUrl) || "#")}" target="_blank" rel="noopener">${esc(a.siteUrl.replace('https://', ''))}</a>` : '<span class="cat">—</span>'}</td>
         <td class="num">${(a.remaining || []).length}</td>
       </tr>
       <tr class="detail" hidden><td colspan="7">${detailHTML(a)}</td></tr>`).join('');
@@ -2042,7 +2046,7 @@ function renderAiUsagePanel() {
           <span dir="ltr">${esc((a.versions && a.versions.prod) || a.versionShort || '')}</span><span>עודכן ${fmtDate(a.gitLastCommitDate)}</span>
           ${c.total ? `<span>סקילים ${c.pct}%</span>` : ''}<span>נותרו ${(a.remaining || []).length}</span>
         </div>
-        ${a.role === 'native' && a.marketingSiteUrl ? `<div class="meta" style="margin-top:6px"><a class="sitelink" href="${esc(mlSafeUrl(a.marketingSiteUrl) || "#")}" target="_blank" rel="noopener">🌐 ${esc(a.marketingSiteUrl.replace('https://', ''))}</a></div>` : ''}
+        ${a.role === 'native' && a.marketingSiteUrl ? `<div class="meta" style="margin-top:6px"><a class="sitelink" href="${esc(safeUrl(a.marketingSiteUrl) || "#")}" target="_blank" rel="noopener">🌐 ${esc(a.marketingSiteUrl.replace('https://', ''))}</a></div>` : ''}
         <details><summary>פירוט מלא</summary>${detailHTML(a)}</details>
       </div>`;
     };
