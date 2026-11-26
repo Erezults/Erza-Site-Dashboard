@@ -1250,10 +1250,10 @@ tr.stats-subrow td { color: var(--ink-2); background: var(--tint); font-size: 11
   <footer>ERZA Orchestrator · ERezult · <span id="footDate"></span> · <a href="https://github.com/Erezults/ERZA_Orchestrator" rel="noopener">registry</a></footer>
 </div>
 
-<script>window.ERZA_UI_VER='6d4fafbf7e5c'</script>
+<script>window.ERZA_UI_VER='68155f1eaa95'</script>
 <script>window.ERZA_DEPLOY_VER='1.23.1'</script>
 <script>window.ERZA_ICONV='a966c7bc'</script>
-<script src="data.enc.js?v=1f772791"></script>
+<script src="data.enc.js?v=dbe9dc42"></script>
 <script>
 /* ---------- constants ---------- */
 const STAGES = {
@@ -3580,12 +3580,12 @@ function mrRender(live) {
     const pipeStepper = () => {
       const hasMig = it.pipelineHasMig, hasOta = it.pipelineHasOta;
       if (!hasMig && !hasOta) return '';
-      const cur = { migration: 0, ota: 1, ready: 2 }[stage || 'ready'];
+      const cur = { migration: 0, ota: 1, review: 2, ready: 3 }[stage || 'ready'];   // 'review' = published to dev before its review (2026-11-26) — not yet for Erez
       const node = (ic, nm, r, present) => { if (!present) return '';
         const done = r < cur, curr = r === cur;
         const col = done ? 'var(--green)' : curr ? 'var(--blue)' : 'var(--muted)';
         return `<span style="color:${col};font-weight:${curr ? 700 : 500};white-space:nowrap">${done ? '✓' : curr ? '◉' : '○'} ${ic} ${nm}</span>`; };
-      const parts = [node('🗄️', 'מיגרציה', 0, hasMig), node('📤', 'OTA', 1, hasOta), node('🔍', 'בדיקה', 2, true)].filter(Boolean);
+      const parts = [node('🗄️', 'מיגרציה', 0, hasMig), node('📤', 'OTA', 1, hasOta), node(it.reviewFailed ? '🐞' : '🧪', 'ביקורת', 2, stage === 'review' || !!it.reviewPassedAt), node('🔍', 'בדיקה', 3, true)].filter(Boolean);
       return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:6px 0 2px;font-size:12px" title="שלב הפריט בצינור">${parts.join('<span style="color:var(--muted)">‹</span>')}</div>`; };
     // A build is NOT an OTA — never gate it on OTA. And only apps the auto-OTA pipeline can
     // actually stamp are gated at all (audit r2 XC-01: Coin/general rows were blocked FOREVER
@@ -3742,7 +3742,7 @@ function mrRender(live) {
     : 'בהכנה';
   const prepIcon = it => it.migVerify ? '🔍'
     : isExecGateOf(it) ? ({ migration: '🗄️', 'prod-ota': '🚀', build: '🏗️' })[gateKind(it)]
-    : it.pipelineStage === 'migration' ? '🗄️' : '⏳';
+    : it.pipelineStage === 'migration' ? '🗄️' : it.pipelineStage === 'review' ? (it.reviewFailed ? '🐞' : '🧪') : '⏳';
   const awaitHtml = prepItems.length ? `<details class="prio-panel" data-mrk="await" style="--panel-accent:#6aa84f">
     <summary>🔧 בתהליך — ${prepItems.length} פריטים שאין לך מה לעשות איתם כרגע: תיקונים שממתינים למיגרציה/דחיפת OTA, ושערים שכבר אישרת ו-ERZA מבצעת. ייסגרו או יעברו ל״לבדיקתך״ אוטומטית</summary>
     <div style="margin-top:8px">${Object.entries(prepByApp)
