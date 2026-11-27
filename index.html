@@ -1272,7 +1272,7 @@ tr.stats-subrow td { color: var(--ink-2); background: var(--tint); font-size: 11
   <footer>ERZA Orchestrator · ERezult · <span id="footDate"></span> · <a href="https://github.com/Erezults/ERZA_Orchestrator" rel="noopener">registry</a></footer>
 </div>
 
-<script>window.ERZA_UI_VER='90c69eccf2b5'</script>
+<script>window.ERZA_UI_VER='620757445938'</script>
 <script>window.ERZA_DEPLOY_VER='1.23.1'</script>
 <script>window.ERZA_ICONV='a966c7bc'</script>
 <script src="data.enc.js?v=71ab8d94"></script>
@@ -1310,7 +1310,7 @@ function mrRankOf(app) {
   for (const [k, v] of Object.entries(mrAppRanks)) if (Number.isFinite(v) && appSlugOf(k) === sl && v < best) best = v;
   return best;
 }
-const canonRows = items => (items || []).map(it => { if (it && CANON_APP[it.app]) it.app = CANON_APP[it.app]; return it; });   // one group per app on the desk (2026-10-27: XpensyNative/xpensy etc. showed twice)
+const canonRows = items => (items || []).map(it => { if (it && CANON_APP[it.app]) it.app = CANON_APP[it.app]; if (it && Array.isArray(it.decisions)) for (const d of it.decisions) { if (d && !d.key && d.id) d.key = d.id; if (d && !d.text && d.label) d.text = d.label; } return it; });   // one group per app on the desk (2026-10-27: XpensyNative/xpensy etc. showed twice)
 const arrOf = v => Array.isArray(v) ? v : (v === undefined || v === null || v === '') ? [] : [String(v)];   // registry rows sometimes carry a string where a list is expected (2026-10-27 render crash)
 const fmtDate = d => { if (!d) return '—'; const m = String(d).match(/\d{4}-\d{2}-\d{2}/); return m ? m[0] : String(d).slice(0, 10); };
 const stageBadge = (a, sm) => { const s = STAGES[a.stage] || STAGES.Unknown;
@@ -3588,11 +3588,12 @@ function mrRender(live) {
     <div class="appr-item" data-aid="${esc(it.id)}" data-decision="1">
       <div class="appr-head"><div class="appr-title">${icon(it.app)}<span class="refid">${esc(it.refId || it.id)}</span><b>${esc(it.title)}</b></div>
         <span class="appr-status" style="color:${closed ? 'var(--muted)' : 'var(--yellow)'}">${closed ? '🗄️ הוכרע ונסגר' : '🗳️ נדרשות החלטות'}</span></div>
+      ${it.brief && typeof it.brief === 'object' ? `<div class="brief">${[['🎯', 'מטרה', 'goal'], ['🔧', 'מה בוצע', 'done'], ['📌', 'השפעה ותוצאה צפויה', 'impact'], ['⚠️', 'סיכון', 'risk'], ['🔍', 'לבדוק לפני ההחלטה', 'precheck']].filter(([, , k]) => it.brief[k]).map(([ic, lb, k]) => `<div class="brief-row${k === 'risk' ? ' risk' : ''}"><b>${ic} ${lb}</b>${esc(it.brief[k])}</div>`).join('')}</div>` : ''}
       ${it.intro ? `<div class="mr-run">${esc(it.intro)}</div>` : ''}
       ${(it.decisions || []).map(d => `<div class="mr-task" data-key="${esc(d.key)}">
         <select class="decsel" ${closed || d.taskCreated ? 'disabled' : ''}>${DEC.map(([v, l]) => `<option value="${v}" ${v === (d.chosen || '') ? 'selected' : ''}>${l}</option>`).join('')}</select>
         <span class="t-title">${esc(d.text)}</span></div>`).join('')}
-      ${arrOf(it.check).length ? `<h5>לבדיקה נפרדת</h5><ul>${arrOf(it.check).map(c => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}
+      ${arrOf(it.check).length && !(it.brief && it.brief.precheck) ? `<h5>לבדיקה נפרדת</h5><ul>${arrOf(it.check).map(c => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}
       ${closed ? '' : '<div class="appr-actions"><button class="btn-approve savedec">💾 שמור החלטות</button></div>'}
     </div>`; };
   const apprItemHtml = it => {
