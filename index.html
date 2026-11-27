@@ -1272,7 +1272,7 @@ tr.stats-subrow td { color: var(--ink-2); background: var(--tint); font-size: 11
   <footer>ERZA Orchestrator · ERezult · <span id="footDate"></span> · <a href="https://github.com/Erezults/ERZA_Orchestrator" rel="noopener">registry</a></footer>
 </div>
 
-<script>window.ERZA_UI_VER='620757445938'</script>
+<script>window.ERZA_UI_VER='3874b1dd948d'</script>
 <script>window.ERZA_DEPLOY_VER='1.23.1'</script>
 <script>window.ERZA_ICONV='a966c7bc'</script>
 <script src="data.enc.js?v=8ae135c1"></script>
@@ -3759,7 +3759,11 @@ function mrRender(live) {
   // Gated review rows (pipeline not yet live — can't be checked) sink below actionable
   // ready rows so Erez sees what he CAN check first (Erez 2026-07-17), but stay above HARM.
   const pendRank = i => isHarm(i) ? 9 : (i.pipelineStage && i.pipelineStage !== 'ready') ? 3 : i.type === 'decision' ? 0 : (i.type === 'migration' || /(^|-)build$/.test(String(i.type || '')) || isExecGateOf(i)) ? 1 : 2;
-  const allPend = (mrApprovals.items || []).filter(i => ['pending', 'decision-pending'].includes(i.status) || isExecGateOf(i))
+  // desk relevance (owner 2026-11-27): a row that is not ripe yet (relevance.visible === false) or is a mechanical failure line ERZA handles herself is never shown to the owner
+  const NOT_HIS_TYPES = new Set(['conductor-stale', 'release-stuck', 'prod-prep-failed']);
+  const hiddenFromOwner = i => (i.relevance && i.relevance.visible === false) || NOT_HIS_TYPES.has(i.type);
+  const onTheWay = (mrApprovals.items || []).filter(i => ['pending', 'decision-pending'].includes(i.status) && hiddenFromOwner(i));
+  const allPend = (mrApprovals.items || []).filter(i => !hiddenFromOwner(i)).filter(i => ['pending', 'decision-pending'].includes(i.status) || isExecGateOf(i))
     .sort((a, b) => pendRank(a) - pendRank(b) || mrRankOf(a.app) - mrRankOf(b.app));
   // Erez 2026-07-18: the "לבדיקתך" field must show ONLY rows he can act on. A review row whose fix
   // isn't live on dev yet (pipelineStage migration/ota) is NOT checkable — it drops out of the desk
@@ -4071,7 +4075,8 @@ function mrRender(live) {
   setDyn('dynOverview', queuePanel + glanceHtml(live));             // ONE unified task queue (running+queued) + quick-glance cards
   setDyn('dynInstr', chatPanelHtml() + inboxHtml + instrHtml);                        // Tab 2 — chat + free instruction + archive
   setDyn('dynItems', apprHtml);                                  // Tab 3 — ONLY the owner's action desk
-  setDyn('dynSys', gateBanner + awaitHtml + condPanel + globPanel + ranksHtml + archHtml); // closed "מצב המערכת" at the bottom (globPanel/ranksHtml keep their controls)
+  const onTheWayHtml = onTheWay.length ? `<div class="mr-run" style="margin:6px 0">🕓 בדרך אליך: ${onTheWay.length} שורות שעוד לא בשלות לאישור — יופיעו למעלה כשהתנאים שלהן יתקיימו</div>` : '';
+  setDyn('dynSys', onTheWayHtml + gateBanner + awaitHtml + condPanel + globPanel + ranksHtml + archHtml); // closed "מצב המערכת" at the bottom (globPanel/ranksHtml keep their controls)
   { const host = document.getElementById('sysBannerHost');      // status banners (built above #mrBody by mrTick) → the closed bottom section
     if (host) for (const id of ['stallBanner', 'conductorWorkBanner', 'accAlertBanner', 'brainFindingsBanner', 'brainKillsBanner', 'consequenceBanner']) { const b = document.getElementById(id); if (b && b.parentElement !== host) host.appendChild(b); } }
   setDyn('dynInfo', infoGridHtml(live) + buildsHtml + relHtml + managedPanel);        // Tab 4 — app grid + builds + push history
