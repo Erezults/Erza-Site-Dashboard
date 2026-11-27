@@ -350,6 +350,11 @@ h1 small { display: block; font-size: 13px; font-weight: 400; color: var(--ink-2
    title takes a full-width line of its own below the app icon + id. */
 .appr-title .refid { flex: 0 1 auto; min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; word-break: break-all; }
 .appr-title b { flex: 1 1 100%; min-width: 0; overflow-wrap: anywhere; line-height: 1.45; }
+.act-count { font-size: 14px; font-weight: 700; margin: 6px 0 10px; color: var(--ink-1); }
+.act-stale { font-size: 12px; font-weight: 600; color: var(--yellow); }
+.act-fail { border: 1px solid var(--red); background: color-mix(in srgb, var(--red) 10%, transparent); border-radius: 10px; padding: 14px; font-size: 15px; font-weight: 700; color: var(--red); margin: 10px 0; }
+.sys-det > summary { color: var(--muted); }
+.act-fail .btn-approve, .act-stale .btn-approve { padding: 6px 16px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
 .brief { margin: 10px 0 6px; display: grid; gap: 9px; }
 .brief-row { font-size: 13.5px; line-height: 1.6; color: var(--ink-2); overflow-wrap: anywhere; }
 .brief-row b { color: var(--ink-1); font-weight: 700; display: block; font-size: 12.5px; margin-bottom: 1px; }
@@ -1163,6 +1168,13 @@ tr.stats-subrow td { color: var(--ink-2); background: var(--tint); font-size: 11
 
     <section class="tab-panel" data-tab="items" hidden>
       <div id="dynItems"></div>
+      <!-- Everything on this tab that is NOT the owner's action (banners, ERZA's own work, global tasks…). Static node so its
+           open/closed state survives every re-render; its contents are re-rendered into #dynSys / #sysBannerHost. -->
+      <details class="prio-panel sys-det" id="sysDet" style="--panel-accent:#7a8ca3;margin-top:18px">
+        <summary>⚙️ מצב המערכת — לא דורש פעולה ממך</summary>
+        <div id="sysBannerHost"></div>
+        <div id="dynSys"></div>
+      </details>
     </section>
 
 
@@ -1260,7 +1272,7 @@ tr.stats-subrow td { color: var(--ink-2); background: var(--tint); font-size: 11
   <footer>ERZA Orchestrator · ERezult · <span id="footDate"></span> · <a href="https://github.com/Erezults/ERZA_Orchestrator" rel="noopener">registry</a></footer>
 </div>
 
-<script>window.ERZA_UI_VER='532c5f6eb1d7'</script>
+<script>window.ERZA_UI_VER='90c69eccf2b5'</script>
 <script>window.ERZA_DEPLOY_VER='1.23.1'</script>
 <script>window.ERZA_ICONV='a966c7bc'</script>
 <script src="data.enc.js?v=71ab8d94"></script>
@@ -2141,7 +2153,7 @@ let chatAtBottom = true, chatScrollSave = null;  // preserve scroll across the a
 let chatApp = '';                                // app the chat is focused on ('' = general) — survives re-renders
 let mrLayout = {}, mrGlobals = { tasks: [] };
 let mrDecDirty = false;      // unsaved decision-dropdown choices (pauses auto-refresh)
-let mrApprovalsErr = false;  // last approvals fetch failed — desk shows last-known + warning
+let mrApprovalsErr = false, mrApprovalsLoadedAt = null;  // last approvals fetch failed — desk shows last-known + warning
 let inboxApp = '';           // app the free-instruction relates to ('' = general) — survives re-renders
 
 /* item 2 — panel order editing: ▲▼ on every panel; order persists to registry/ui_layout.json */
@@ -3421,8 +3433,7 @@ function bindDynamicExtras() {
     if (+t.dataset.ovred > 0) {                                   // has approvals waiting → jump to that app's items
       switchTab('items');
       setTimeout(() => {
-        const apprPanel = document.querySelector('#dynItems details[data-mrk="appr"]'); if (apprPanel) apprPanel.open = true;
-        const grp = document.querySelector(`#dynItems [data-mrsub="appr-${app}"]`);
+        const grp = document.querySelector(`#dynItems [data-mrsub="act-${app}"]`);
         if (grp) { grp.open = true; grp.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
       }, 60);
     } else { openAppInfo(app); }                                  // otherwise → the app's info overlay (Tab 4)
@@ -3575,7 +3586,7 @@ function mrRender(live) {
   const decItemHtml = it => { const closed = !['pending', 'decision-pending'].includes(it.status); // archived decisions are read-only (audit r2)
     return `
     <div class="appr-item" data-aid="${esc(it.id)}" data-decision="1">
-      <div class="appr-head">${icon(it.app)}<span class="refid">${esc(it.refId || it.id)}</span><b>${esc(it.title)}</b>
+      <div class="appr-head"><div class="appr-title">${icon(it.app)}<span class="refid">${esc(it.refId || it.id)}</span><b>${esc(it.title)}</b></div>
         <span class="appr-status" style="color:${closed ? 'var(--muted)' : 'var(--yellow)'}">${closed ? '🗄️ הוכרע ונסגר' : '🗳️ נדרשות החלטות'}</span></div>
       ${it.intro ? `<div class="mr-run">${esc(it.intro)}</div>` : ''}
       ${(it.decisions || []).map(d => `<div class="mr-task" data-key="${esc(d.key)}">
@@ -3631,6 +3642,8 @@ function mrRender(live) {
     const dedup = a => brief ? arrOf(a).filter(x => !/^\s*(🎯|🔧|📌|⚠️?|↩️?|🔍)/u.test(String(x))) : arrOf(a);
     const briefHtml = brief ? `<div class="brief">${[['🎯', 'מטרה', 'goal'], ['🔧', 'מה בוצע', 'done'], ['📌', 'השפעה ותוצאה צפויה', 'impact'], ['⚠️', 'סיכון באישור', 'risk'], ['🔍', 'לבדוק לפני האישור', 'precheck'], ['↩️', 'למה זה אצלך', 'why']]
       .filter(([, , k]) => brief[k]).map(([ic, lb, k]) => `<div class="brief-row${k === 'risk' ? ' risk' : ''}"><b>${ic} ${lb}</b>${esc(brief[k])}</div>`).join('')}</div>` : '';
+    const stuckM = isMig ? (live.pendingMigrations || []).find(m => String(m.app).replace(/Native|_New/g, '').toLowerCase() === String(it.app).replace(/Native|_New/g, '').toLowerCase() && m.ageMin > 120) : null;
+    const stuckHtml = stuckM ? `<div class="mdl" style="--bc:var(--red);margin:6px 0">⏳ ה-OTA של האפליקציה תקוע כבר ~${Math.round(stuckM.ageMin / 60)} שעות עד לאישור הזה</div>` : '';
     const techOpen = brief ? '<details class="tech-det"><summary>פרטים טכניים</summary>' : '';
     const techExtra = brief ? `${it.note ? `<div class="mr-run">${esc(it.note)}</div>` : ''}${arrOf(it.riskHits).length ? `<h5>סיכונים שזוהו</h5><ul>${arrOf(it.riskHits).map(c => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}${arrOf(it.files).length ? `<h5>קבצים</h5><div class="tech-files">${arrOf(it.files).map(f => `<div>${esc(f)}</div>`).join('')}</div>` : ''}</details>` : '';
     const blocked = stage ? stage !== 'ready' : (needsOta && !otaLive);
@@ -3673,7 +3686,7 @@ function mrRender(live) {
               ? `<span class="mdl" style="--bc:var(--blue)" title="worker רץ על האפליקציה כרגע">🔧 עבודה פעילה על האפליקציה — ה-OTA יידחף אוטומטית בסיומה</span>`
               : `<span class="mdl" style="--bc:var(--yellow)" title="ממתין לדחיפה בטיק הקרוב">⏳ ה-OTA בתור לדחיפה (טיק של עד 5 דק׳)</span>`)
             : `<span class="mdl" style="--bc:var(--blue)">🗳️ פריט החלטה (לא דורש OTA)</span>`}</div>
-        ${briefHtml}
+        ${stuckHtml}${briefHtml}
         ${it.lovableDoc ? (() => {
           // Coin is Lovable-managed (no OTA) — surface the paste-ready doc as a real
           // downloadable file + one-tap copy so Erez can send it to Lovable directly
@@ -3821,17 +3834,39 @@ function mrRender(live) {
     const ageDays = Math.min((Date.now() - new Date(it.at || Date.now()).getTime()) / 864e5, 6);
     return effortOf(it) - ageDays * 0.4;                                               // easy first; older nudged up
   };
-  const migGrpHtml = migRows.length ? `<details class="appr-appgrp appr-miggrp" data-mrsub="appr-migs" style="margin:6px 0"><summary>🗄️ מיגרציות נדרשות<span class="appgrp-cnt">${migRows.length} · אישור ⇒ ERZA מריצה על ה-DB ודוחפת OTA</span></summary>
-      <div style="margin-top:8px">${migRows.map(apprItemHtml).join('')}</div></details>` : '';
-  const apprHtml = `<details class="prio-panel" data-mrk="appr" style="--panel-accent:var(--green)">
-    <summary>✅ לבדיקתך — ${pendItems.length ? `${pendItems.length} פריטים${migRows.length ? ` · ${migRows.length} מיגרציות` : ''} · ${pendAppKeys.length} אפליקציות` : 'אין כרגע (שום דבר לא נדחף ל-dev עדיין)'}${mrApprovalsErr ? ' <span style="color:var(--yellow)">⚠️ שליפת האישורים נכשלה — מוצג המצב האחרון הידוע</span>' : ''}</summary>
-    <div style="margin-top:10px">${pendItems.length ? migGrpHtml + pendAppKeys.map(app => {
-      const its = pendByApp[app].slice().sort((a, b) => smartRank(a) - smartRank(b));
-      const label = app === '__general__' ? '🌐 כללי / חוצה-אפליקציות' : `${icon(app)}${esc(displayApp(app))}`;
-      return `<details class="appr-appgrp" data-mrsub="appr-${app === '__general__' ? 'general' : esc(app)}" style="margin:6px 0"><summary>${label}<span class="appgrp-cnt">${grpSummary(its)}</span></summary>
-        <div style="margin-top:8px">${its.map(apprItemHtml).join('')}</div></details>`;
-    }).join('') : '<div class="mr-setup">שורות יופיעו כאן רק אחרי שהתיקון נדחף ל-dev והגרסה עלתה — אז אפשר לבדוק על האפליקציה.</div>'}</div>
-  </details>` + awaitHtml;
+  // ── ACTION DESK (Erez 2026-11-27): the tab opens with what needs HIS click, in this order:
+  //    migrations (block releases) → decisions → prod approvals/builds → items to check (per app). All open by default;
+  //    a group he collapsed stays collapsed across the refresh tick. data-mrsub="act-*" (not "appr-*") so default-open
+  //    groups don't count as "reviewing" and stretch the auto-refresh hold.
+  const prevSub = new Map([...document.querySelectorAll('#dynItems details[data-mrsub]')].map(d => [d.dataset.mrsub, d.open]));
+  const subOpen = k => (prevSub.has(k) ? prevSub.get(k) : true) ? ' open' : '';
+  const isDecRow = i => i.type === 'decision' || (i.decisions || []).length > 0;
+  const isProdRow = i => i.type === 'prod-ota' || /(^|-)build$/.test(String(i.type || ''));
+  const decRows = pendItems.filter(i => !isMigRow(i) && isDecRow(i));
+  const prodRows = pendItems.filter(i => !isMigRow(i) && !isDecRow(i) && isProdRow(i));
+  const checkRows = pendItems.filter(i => !isMigRow(i) && !isDecRow(i) && !isProdRow(i));
+  const checkByApp = {};
+  for (const it of checkRows) { const k = GENERIC_APP.has(it.app || '') ? '__general__' : it.app; (checkByApp[k] = checkByApp[k] || []).push(it); }
+  const checkAppKeys = Object.keys(checkByApp).sort((a, b) =>
+    (a === '__general__' ? 1 : 0) - (b === '__general__' ? 1 : 0)
+    || mrRankOf(a) - mrRankOf(b) || a.localeCompare(b));
+  const kindGrp = (key, title, rows) => rows.length ? `<details class="appr-appgrp${key === 'migs' ? ' appr-miggrp' : ''}" data-mrsub="act-${key}"${subOpen('act-' + key)} style="margin:6px 0"><summary>${title}<span class="appgrp-cnt">${rows.length}</span></summary>
+      <div style="margin-top:8px">${rows.map(apprItemHtml).join('')}</div></details>` : '';
+  const countParts = [migRows.length && `${migRows.length} מיגרציות`, decRows.length && `${decRows.length} החלטות`, prodRows.length && `${prodRows.length} אישורי prod/בילד`, checkRows.length && `${checkRows.length} לבדיקה`].filter(Boolean);
+  const loadedHm = mrApprovalsLoadedAt ? new Date(mrApprovalsLoadedAt).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
+  const deskFailed = mrApprovalsErr && !mrApprovalsLoadedAt;   // never loaded anything — must NOT read as "nothing to do"
+  const apprHtml = `<div class="act-desk" data-mrk="appr">` + (deskFailed
+    ? `<div class="act-fail">⚠️ לא הצלחתי לטעון את הרשומות שלך <button class="btn-approve" id="apprRetry" style="margin-inline-start:8px">נסה שוב</button></div>`
+    : `<div class="act-count">${countParts.length ? countParts.join(' · ') : '✓ אין כרגע שום דבר שממתין לך'}${mrApprovalsErr ? ` <span class="act-stale">⚠️ הטעינה האחרונה נכשלה — מוצג מצב מ-${loadedHm} <button class="btn-approve" id="apprRetry" style="margin-inline-start:6px;padding:2px 10px">נסה שוב</button></span>` : ''}</div>`
+      + kindGrp('migs', '🗄️ מיגרציות — אישור משחרר OTA', migRows)
+      + kindGrp('decs', '🗳️ החלטות', decRows)
+      + kindGrp('prod', '🚀 אישורי prod / בילד', prodRows)
+      + checkAppKeys.map(app => {
+        const its = checkByApp[app].slice().sort((a, b) => smartRank(a) - smartRank(b));
+        const label = app === '__general__' ? '🌐 כללי / חוצה-אפליקציות' : `${icon(app)}${esc(displayApp(app))}`;
+        return `<details class="appr-appgrp" data-mrsub="act-${app === '__general__' ? 'general' : esc(app)}"${subOpen('act-' + (app === '__general__' ? 'general' : app))} style="margin:6px 0"><summary>${label}<span class="appgrp-cnt">${grpSummary(its)}</span></summary>
+          <div style="margin-top:8px">${its.map(apprItemHtml).join('')}</div></details>`;
+      }).join('')) + `</div>`;
 
   const taskName = id => { for (const d of Object.values(live.apps || {})) { const all = [...(d.queued || []), ...(d.recent || []), d.running].filter(Boolean); const f = all.find(t => t.id === id); if (f) return f.title; } return id; };
   const instrHtml = (mrInstr.items || []).length ? `<details class="prio-panel" data-mrk="instr" style="margin-top:12px;--panel-accent:#4a7ba6">
@@ -4025,10 +4060,6 @@ function mrRender(live) {
     // show the executor's own reason, and only shout about age when nothing explains it.
     ? `<div style="border:1px solid #8e44ad;background:color-mix(in srgb,#8e44ad 9%,transparent);border-radius:10px;padding:8px 12px;margin:8px 0;font-size:13px;font-weight:600">🗄️ ${live.approvedGates.length} אישורים ממתינים לביצוע ERZA — ${live.approvedGates.map(g => `${g.type === 'prod-ota' ? '📤' : /build/.test(String(g.type || '')) ? '🏗️' : '🗄️'} ${esc(displayApp(g.app))}${g.blocked ? ` <span style="color:#e0b000">⏸️ ${esc(String(g.note || 'חסום כרגע').slice(0, 70))}</span>` : g.ageMin > 90 ? ` <span style="color:#e05252">(${Math.round(g.ageMin / 60)} שע׳ ללא ביצוע!)</span>` : ''}`).join(' · ')}</div>`
     : '';
-  // pending migrations block stuck OTAs — one clear call-to-action banner (Erez 2026-07-18)
-  const migBanner = (live.pendingMigrations || []).length
-    ? `<div style="border:1px solid #d98c1f;background:color-mix(in srgb,#d98c1f 12%,transparent);border-radius:10px;padding:9px 12px;margin:8px 0;font-size:13px;font-weight:700">🗄️ ${live.pendingMigrations.length} מיגרציות DB ממתינות לאישורך — <span style="font-weight:600">אישורן משחרר את ה-OTA התקוע של:</span> ${live.pendingMigrations.map(m => `${esc(String(m.app).replace(/Native|_New/g, ''))}${m.ageMin > 120 ? ` <span style="color:#e05252">(${Math.round(m.ageMin / 60)}ש׳)</span>` : ''}`).join(' · ')}. <span style="font-weight:600">אשר כל שורת 🗄️ סגולה למטה ⇒ ERZA מריצה את המיגרציה ודוחפת את ה-OTA אוטומטית.</span></div>`
-    : '';
   // 5-TAB DISTRIBUTION (Erez 2026-07-19): split the machine-room panels across the tabs instead
   // of one long scroll. Each tab writes into its own #dyn* container — all still INSIDE #mrBody,
   // so every #mrBody-scoped binding + open-state query below keeps working unchanged.
@@ -4038,7 +4069,10 @@ function mrRender(live) {
   setDyn('dynGrid', overviewGridHtml(live));                        // Tab 1 — app grid centerpiece, FIRST thing under the tabs
   setDyn('dynOverview', queuePanel + glanceHtml(live));             // ONE unified task queue (running+queued) + quick-glance cards
   setDyn('dynInstr', chatPanelHtml() + inboxHtml + instrHtml);                        // Tab 2 — chat + free instruction + archive
-  setDyn('dynItems', migBanner + gateBanner + apprHtml + condPanel + globPanel + ranksHtml + archHtml); // Tab 3 (queue moved to the ONE unified panel on the overview tab)
+  setDyn('dynItems', apprHtml);                                  // Tab 3 — ONLY the owner's action desk
+  setDyn('dynSys', gateBanner + awaitHtml + condPanel + globPanel + ranksHtml + archHtml); // closed "מצב המערכת" at the bottom (globPanel/ranksHtml keep their controls)
+  { const host = document.getElementById('sysBannerHost');      // status banners (built above #mrBody by mrTick) → the closed bottom section
+    if (host) for (const id of ['stallBanner', 'conductorWorkBanner', 'accAlertBanner', 'brainFindingsBanner', 'brainKillsBanner', 'consequenceBanner']) { const b = document.getElementById(id); if (b && b.parentElement !== host) host.appendChild(b); } }
   setDyn('dynInfo', infoGridHtml(live) + buildsHtml + relHtml + managedPanel);        // Tab 4 — app grid + builds + push history
   bindDynamicExtras();
   updateTabBadges(pendItems.length, bAckCount);
@@ -4050,6 +4084,7 @@ function mrRender(live) {
     try { await saveGlobalRequest(b.dataset.gid); b.textContent = '⏳ הופעל'; }
     catch { b.textContent = 'שגיאה — נסה שוב'; b.disabled = false; }
   }; });
+  { const rb = document.getElementById('apprRetry'); if (rb) rb.onclick = () => { rb.disabled = true; rb.textContent = 'טוען…'; mrTick(); }; }
   bindApprovals();
   bindChat();
 
@@ -4396,7 +4431,7 @@ async function mrTick() {
       const { json: parsed, sha: apprSha } = await ghJsonWithSha('registry/approvals.json'); const meta = { sha: apprSha };
       // parse FIRST — a transient failure (or a >1MB empty-content response) must keep the
       // last-known desk and NEVER leave a valid sha beside empty items (audit r2)
-      parsed.items = canonRows(parsed.items); mrApprovals = parsed; mrApprovalsSha = meta.sha; mrApprovalsErr = false;
+      parsed.items = canonRows(parsed.items); mrApprovals = parsed; mrApprovalsSha = meta.sha; mrApprovalsErr = false; mrApprovalsLoadedAt = Date.now();
     } catch { mrApprovalsErr = true; /* keep last-known mrApprovals */ }
     try { mrInstr = await gh('registry/instructions_log.json'); } catch { mrInstr = { items: [] }; }
     try { const c = await gh('registry/chat.json'); if (c && Array.isArray(c.messages)) mrChat = c; } catch { /* no chat yet */ }
