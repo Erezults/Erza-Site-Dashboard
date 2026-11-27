@@ -344,9 +344,19 @@ h1 small { display: block; font-size: 13px; font-weight: 400; color: var(--ink-2
    (Erez, mobile fix): a squeezed flex title was wrapping one-word-per-line. */
 .appr-head { display: block; }
 .appr-head b { font-size: 14px; }
-.appr-title { display: flex; align-items: flex-start; gap: 8px; width: 100%; }
-.appr-title b { flex: 1; min-width: 0; overflow-wrap: break-word; }
-.appr-title .refid { flex-shrink: 0; }
+.appr-title { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px 8px; width: 100%; }
+/* Root cause of the one-letter-per-line title (Erez 2026-11-27): .refid is white-space:nowrap + flex-shrink:0, so a
+   long task id ate the whole row and the title cell shrank to min-content. The id may now shrink/wrap, and the
+   title takes a full-width line of its own below the app icon + id. */
+.appr-title .refid { flex: 0 1 auto; min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; word-break: break-all; }
+.appr-title b { flex: 1 1 100%; min-width: 0; overflow-wrap: anywhere; line-height: 1.45; }
+.brief { margin: 10px 0 6px; display: grid; gap: 9px; }
+.brief-row { font-size: 13.5px; line-height: 1.6; color: var(--ink-2); overflow-wrap: anywhere; }
+.brief-row b { color: var(--ink-1); font-weight: 700; display: block; font-size: 12.5px; margin-bottom: 1px; }
+.brief-row.risk { border-inline-start: 3px solid var(--yellow); padding: 4px 9px; border-radius: 4px; background: color-mix(in srgb, var(--yellow) 8%, transparent); }
+.tech-det { margin: 10px 0 4px; border-top: 1px dashed var(--grid); padding-top: 6px; }
+.tech-det > summary { cursor: pointer; font-size: 12.5px; color: var(--muted); font-weight: 600; padding: 4px 0; }
+.tech-det .tech-files { font-size: 12px; direction: ltr; text-align: left; font-family: ui-monospace, monospace; overflow-wrap: anywhere; margin: 4px 0; }
 .appr-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 7px; }
 /* never let long unbroken tokens (paths, ids, versions) push past the viewport — catch-all:
    every text node inside the machine room wraps, and panels clip anything that still tries. */
@@ -408,7 +418,7 @@ h1 small { display: block; font-size: 13px; font-weight: 400; color: var(--ink-2
 }
 
 /* pushrow badges are full sentences — they always wrap (the version pill stays short) */
-.pushrow .mdl, .appr-tags .mdl { white-space: normal; line-height: 1.45; }
+.pushrow .mdl, .appr-tags .mdl, .appr-item .mdl { white-space: normal; line-height: 1.45; max-width: 100%; }
 @media (max-width: 640px) {
   .mdl { white-space: normal; line-height: 1.45; }
 }
@@ -1250,7 +1260,7 @@ tr.stats-subrow td { color: var(--ink-2); background: var(--tint); font-size: 11
   <footer>ERZA Orchestrator · ERezult · <span id="footDate"></span> · <a href="https://github.com/Erezults/ERZA_Orchestrator" rel="noopener">registry</a></footer>
 </div>
 
-<script>window.ERZA_UI_VER='68155f1eaa95'</script>
+<script>window.ERZA_UI_VER='7453b474514e'</script>
 <script>window.ERZA_DEPLOY_VER='1.23.1'</script>
 <script>window.ERZA_ICONV='a966c7bc'</script>
 <script src="data.enc.js?v=82efde99"></script>
@@ -3601,6 +3611,13 @@ function mrRender(live) {
     // local OTA heuristic, so a review row is actionable ONLY at stage 'ready' — never before
     // its migration+OTA are live (Erez 2026-07-17: don't show a check-row mid-pipeline).
     const stage = it.pipelineStage;
+    const brief = it.brief && typeof it.brief === 'object' && !Array.isArray(it.brief) ? it.brief : null;
+    // rows with a brief: done/check lines starting with a brief emoji duplicate it (written as a fallback for old renderers)
+    const dedup = a => brief ? arrOf(a).filter(x => !/^\s*(🎯|🔧|📌|⚠️?|↩️?|🔍)/u.test(String(x))) : arrOf(a);
+    const briefHtml = brief ? `<div class="brief">${[['🎯', 'מטרה', 'goal'], ['🔧', 'מה בוצע', 'done'], ['📌', 'השפעה ותוצאה צפויה', 'impact'], ['⚠️', 'סיכון באישור', 'risk'], ['🔍', 'לבדוק לפני האישור', 'precheck'], ['↩️', 'למה זה אצלך', 'why']]
+      .filter(([, , k]) => brief[k]).map(([ic, lb, k]) => `<div class="brief-row${k === 'risk' ? ' risk' : ''}"><b>${ic} ${lb}</b>${esc(brief[k])}</div>`).join('')}</div>` : '';
+    const techOpen = brief ? '<details class="tech-det"><summary>פרטים טכניים</summary>' : '';
+    const techExtra = brief ? `${it.note ? `<div class="mr-run">${esc(it.note)}</div>` : ''}${arrOf(it.riskHits).length ? `<h5>סיכונים שזוהו</h5><ul>${arrOf(it.riskHits).map(c => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}${arrOf(it.files).length ? `<h5>קבצים</h5><div class="tech-files">${arrOf(it.files).map(f => `<div>${esc(f)}</div>`).join('')}</div>` : ''}</details>` : '';
     const blocked = stage ? stage !== 'ready' : (needsOta && !otaLive);
     return `
       <div class="appr-item ${esc(it.status)}${isBuild ? ' build' : ''}${isMig ? ' mig' : ''}" data-aid="${esc(it.id)}">
@@ -3641,6 +3658,7 @@ function mrRender(live) {
               ? `<span class="mdl" style="--bc:var(--blue)" title="worker רץ על האפליקציה כרגע">🔧 עבודה פעילה על האפליקציה — ה-OTA יידחף אוטומטית בסיומה</span>`
               : `<span class="mdl" style="--bc:var(--yellow)" title="ממתין לדחיפה בטיק הקרוב">⏳ ה-OTA בתור לדחיפה (טיק של עד 5 דק׳)</span>`)
             : `<span class="mdl" style="--bc:var(--blue)">🗳️ פריט החלטה (לא דורש OTA)</span>`}</div>
+        ${briefHtml}
         ${it.lovableDoc ? (() => {
           // Coin is Lovable-managed (no OTA) — surface the paste-ready doc as a real
           // downloadable file + one-tap copy so Erez can send it to Lovable directly
@@ -3654,7 +3672,7 @@ function mrRender(live) {
             <button class="lvcopy" data-b64="${b64}" style="background:transparent;border:1px solid var(--blue);color:var(--blue);border-radius:6px;padding:6px 13px;font-size:13px;font-weight:700;cursor:pointer">📋 העתק הכל</button>
           </div>`;
         })() : ''}
-        ${(it.changes || []).length ? (() => {
+        ${techOpen}${(it.changes || []).length ? (() => {
           // Consolidated dev-OTA review (Erez 2026-07-17): accumulated changes grouped by the
           // OTA they shipped in. Check once on the LATEST (cumulative) build; each change keeps
           // its own detail + version/sha so a later fix or rollback is traceable to its build.
@@ -3662,7 +3680,7 @@ function mrRender(live) {
           const vers = Object.keys(byOta).sort();
           const latest = it.latestOta || vers[vers.length - 1] || '';
           return `<div class="mdl" style="--bc:var(--blue);margin:6px 0">📦 ${it.changes.length} שינויים מצטברים על פני ${vers.length} גרסאות OTA — בדוק פעם אחת על הגרסה האחרונה <b dir="ltr">${esc(latest)}</b> (מצטברת: כוללת את כל השינויים).</div>
-          ${arrOf(it.check).length ? `<div style="border:1px solid var(--green);border-radius:8px;padding:7px 10px;margin:6px 0;display:block"><b style="font-size:13px">✅ מה לבדוק (פעם אחת, על הגרסה האחרונה):</b><ul style="margin:4px 0 0;padding-inline-start:20px;font-size:13px;line-height:1.6;overflow-wrap:anywhere">${arrOf(it.check).map(c => `<li>${esc(c)}</li>`).join('')}</ul></div>` : ''}
+          ${dedup(it.check).length ? `<div style="border:1px solid var(--green);border-radius:8px;padding:7px 10px;margin:6px 0;display:block"><b style="font-size:13px">✅ מה לבדוק (פעם אחת, על הגרסה האחרונה):</b><ul style="margin:4px 0 0;padding-inline-start:20px;font-size:13px;line-height:1.6;overflow-wrap:anywhere">${dedup(it.check).map(c => `<li>${esc(c)}</li>`).join('')}</ul></div>` : ''}
           <div style="font-size:11px;color:var(--muted);margin:2px 0 4px">הפירוט הטכני של כל שינוי (לשחזור/רול-בק) — פתח כל שורה:</div>
           ${vers.map(v => `<div class="ota-grp">
             <div class="ota-grp-h">📦 OTA <b dir="ltr">${esc(v)}</b> <span class="ota-cnt">${byOta[v].length} שינויים</span></div>
@@ -3671,10 +3689,10 @@ function mrRender(live) {
               ${(c.done || []).length ? `<div class="ota-chg-b"><b>מה בוצע (טכני)</b><ul>${c.done.map(d => `<li>${esc(d)}</li>`).join('')}</ul></div>` : ''}
             </details>`).join('')}
           </div>`).join('')}`;
-        })() : `<div class="wr-done"><h5>מה בוצע</h5><ul>${arrOf(it.done).map(d => `<li>${esc(d)}</li>`).join('')}</ul></div>
-        ${arrOf(it.check).length
-          ? `<div class="wr-check"><h5>🔍 מה לבדוק כדי לאשר</h5><ul>${arrOf(it.check).map(c => `<li>${esc(c)}</li>`).join('')}</ul></div>`
-          : `<div class="wr-nocheck">✓ שינוי פנימי — אין מה לבדוק ידנית, אפשר לאשר</div>`}`}
+        })() : `<div class="wr-done"><h5>מה בוצע</h5><ul>${dedup(it.done).map(d => `<li>${esc(d)}</li>`).join('')}</ul></div>
+        ${dedup(it.check).length
+          ? `<div class="wr-check"><h5>🔍 מה לבדוק כדי לאשר</h5><ul>${dedup(it.check).map(c => `<li>${esc(c)}</li>`).join('')}</ul></div>`
+          : brief ? '' : `<div class="wr-nocheck">✓ שינוי פנימי — אין מה לבדוק ידנית, אפשר לאשר</div>`}`}${techExtra}
         ${(it.decisions || []).length ? `${(() => { const tot = it.decisions.length, done = it.decisions.filter(d => d.taskCreated).length, saved = it.decisions.filter(d => d.chosen && !d.taskCreated).length, left = tot - done - saved;
           return done + saved ? `<div class="mdl" style="--bc:${left ? 'var(--yellow)' : 'var(--green)'};margin:6px 0">${done ? `✓ ${done} הפכו למשימות` : ''}${done && saved ? ' · ' : ''}${saved ? `💾 ${saved} נשמרו (יהפכו למשימות תוך ~5 דק׳)` : ''}${left ? ` · נותרו ${left} להכרעה — הפריט ייסגר ויֵעלם רק כשכל השורות יוכרעו` : ' · כל השורות הוכרעו — הפריט ייסגר בטיק הקרוב'}</div>` : ''; })()}<h5>🗳️ החלטות בתוך הרשומה — סמן ליד כל אחת</h5>
           ${it.decisions.map(d => `<div class="mr-task" data-key="${esc(d.key)}">
