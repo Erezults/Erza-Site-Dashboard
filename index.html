@@ -1260,7 +1260,7 @@ tr.stats-subrow td { color: var(--ink-2); background: var(--tint); font-size: 11
   <footer>ERZA Orchestrator · ERezult · <span id="footDate"></span> · <a href="https://github.com/Erezults/ERZA_Orchestrator" rel="noopener">registry</a></footer>
 </div>
 
-<script>window.ERZA_UI_VER='7453b474514e'</script>
+<script>window.ERZA_UI_VER='532c5f6eb1d7'</script>
 <script>window.ERZA_DEPLOY_VER='1.23.1'</script>
 <script>window.ERZA_ICONV='a966c7bc'</script>
 <script src="data.enc.js?v=82efde99"></script>
@@ -2260,6 +2260,22 @@ async function gh(pathName, ref, opts = {}) {
   return r.status === 204 ? null : r.json();
 }
 
+// A registry file over GitHub's 1MB contents-API cap comes back with its sha but an EMPTY
+// content (encoding "none") — that blanked the whole approval desk (2026-11-27). Read such a
+// file through the blob API instead (base64, up to 100MB). Returns { json, sha }.
+async function ghJsonWithSha(pathName) {
+  const meta = await gh(pathName, undefined, { headers: { Accept: 'application/vnd.github+json' } });
+  let b64 = String(meta.content || '').replace(/\s/g, '');
+  if (!b64) {
+    const r = await fetch(`https://api.github.com/repos/${GH.owner}/${GH.repo}/git/blobs/${meta.sha}`, { cache: 'no-store', signal: AbortSignal.timeout(60000),
+      headers: { Authorization: 'Bearer ' + pat(), Accept: 'application/vnd.github+json' } });
+    if (!r.ok) { const e = new Error('GH ' + r.status); e.status = r.status; throw e; }
+    b64 = String((await r.json()).content || '').replace(/\s/g, '');
+  }
+  if (!b64) throw new Error('empty registry file');
+  return { json: JSON.parse(decodeURIComponent(escape(atob(b64)))), sha: meta.sha };
+}
+
 // (The "בצע עכשיו" backlog-promotion helper is retired — site audit 2026-08-21: the 'backlog'
 //  task status was retired 2026-07-24 (every waiting task is 'queued'), no panel has rendered a
 //  .backlog-run button since, and registry/work_queue.json holds 0 backlog tasks. It was also the
@@ -2322,8 +2338,7 @@ async function saveApprovals() {
     // Refetch fresh content+sha and REBASE the local edits onto it by id: only the fields
     // the user actually decides (status/feedback/decisions) are overlaid, so concurrent
     // tick stamps (push/gate) are never overwritten. Then retry once.
-    const meta = await gh('registry/approvals.json', undefined, { headers: { Accept: 'application/vnd.github+json' } });
-    const fresh = JSON.parse(decodeURIComponent(escape(atob(meta.content.replace(/\s/g, '')))));
+    const { json: fresh, sha: freshSha } = await ghJsonWithSha('registry/approvals.json'); const meta = { sha: freshSha };
     const freshItems = fresh.items || [];
     const byId = new Map(freshItems.map(i => [i.id, i]));
     for (const loc of (mrApprovals.items || [])) {
@@ -4378,10 +4393,9 @@ async function mrTick() {
         : 'טרם הופעל — הפעל את "מטריצת תאימות" בפאנל 🌍 משימות גלובליות בטאב "לטיפולך".') + '</div>'; }
     applyPageOrder(); injectMoveButtons('#main details[data-pgk]');
     try {
-      const meta = await gh('registry/approvals.json', undefined, { headers: { Accept: 'application/vnd.github+json' } });
+      const { json: parsed, sha: apprSha } = await ghJsonWithSha('registry/approvals.json'); const meta = { sha: apprSha };
       // parse FIRST — a transient failure (or a >1MB empty-content response) must keep the
       // last-known desk and NEVER leave a valid sha beside empty items (audit r2)
-      const parsed = JSON.parse(decodeURIComponent(escape(atob(meta.content.replace(/\s/g, '')))));
       parsed.items = canonRows(parsed.items); mrApprovals = parsed; mrApprovalsSha = meta.sha; mrApprovalsErr = false;
     } catch { mrApprovalsErr = true; /* keep last-known mrApprovals */ }
     try { mrInstr = await gh('registry/instructions_log.json'); } catch { mrInstr = { items: [] }; }
